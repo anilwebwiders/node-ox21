@@ -3,6 +3,8 @@ const uuidv5 = require('uuid');
 const https = require('https');
 const CryptoJS = require("crypto-js");
 const MY_VAR = require('../constant');
+const web3 = require("../web3");
+const fs = require("fs")
 
 exports.checker_payment = async (req, responce) => {
 
@@ -53,7 +55,7 @@ exports.checker_payment = async (req, responce) => {
 
                     if (bids.length > 0) {
                         for (let i = 0; i < bids.length; i++) {
-                            const bid = bids[i];
+                            let bid = bids[i];
                             let oid = parseInt(bid.orderID);
                             //let obj = outputs.find(o => o.value == v);
 
@@ -69,11 +71,34 @@ exports.checker_payment = async (req, responce) => {
 
                             if (obj) {
 
-                                let trxOrdId2 = obj.value % 1000000;
-                                let update_Bid = await common.update_data('banner_bids', { payment_status: 1, status: 1, transaction_id: obj.addresses[0] }, { id: bid.id });
-                                let add_banner = await common.add_data('banner_owner', { uuid: bid.user_uuid, hash: bid.hash });
 
-                                var bytes = CryptoJS.AES.decrypt(bid.hash, MY_VAR.SHA_KEY);
+                                common.update_data('banner_bids', { payment_status: 1, status: 1, transaction_id: obj.addresses[0] }, { id: bid.id });
+
+
+                                let update_banner = {
+                                    uuid: bid.user_uuid,
+                                    hash: bid.hash,
+                                    language: bid.language,
+                                    country: bid.country,
+                                    state: bid.state,
+                                    city: bid.city,
+                                    channel: bid.channel,
+                                    page_number: bid.page_number,
+                                    user_id:bid.user_id
+                                }
+
+                                common.add_data('banner_owner', update_banner);
+
+                                let traxnInsert = {
+                                    user_id: bid.user_id,
+                                    message: `Spend ${bid.price} BTC to buy a banner`,
+                                    btc_amount: bid.price,
+                                    trxn_id: new Date().getTime(),
+                                    trxn_type: 0
+                                }
+                                common.add_data('transactions', traxnInsert);
+
+                                /*var bytes = CryptoJS.AES.decrypt(bid.hash, MY_VAR.SHA_KEY);
                                 if (bytes) {
                                     var originalText = bytes.toString(CryptoJS.enc.Utf8);
 
@@ -81,37 +106,46 @@ exports.checker_payment = async (req, responce) => {
 
                                         let channel_id = originalText.split(',');
 
-                                        if (channel_id && channel_id.length > 0) {
+                                        if (channel_id && channel_id.length > 0) {*/
 
-                                            channel_id = parseInt(channel_id[4]);
+                                channel_id = parseInt(bid.channel);
 
-                                            const channelWithUser = await common.get_dynamic_data('channels', " inner join users on users.id = channels.created_by where channels.id = " + channel_id, "channels.*, users.uuid as user_uuid, users.id as user_id, users.btc_wallet as btc_wallet");
+                                const channelWithUser = await common.get_dynamic_data('channels', " inner join users on users.id = channels.created_by where channels.id = " + channel_id, "channels.*, users.uuid as user_uuid, users.id as user_id, users.btc_wallet as btc_wallet");
 
-                                            //console.log('channelWithUser', channelWithUser);
+                                //console.log('channelWithUser', channelWithUser);
 
-                                            if (channelWithUser.length > 0) {
-                                                let amount = bid.price;
+                                if (channelWithUser.length > 0) {
+                                    let amount = bid.price;
 
-                                                //console.log('amount', amount);
+                                    //console.log('amount', amount);
 
-                                                let ownerAmount = amount * 0.1;
-                                                //console.log('ownerAmount', ownerAmount);
+                                    let ownerAmount = amount * 0.1;
+                                    //console.log('ownerAmount', ownerAmount);
 
-                                                let ownerTotalBtc = channelWithUser[0].btc_wallet + ownerAmount;
-                                                //console.log('ownerTotalBtc', ownerTotalBtc);
+                                    let ownerTotalBtc = channelWithUser[0].btc_wallet + ownerAmount;
+                                    //console.log('ownerTotalBtc', ownerTotalBtc);
 
-                                                common.update_data('users', { btc_wallet: ownerTotalBtc }, { id: channelWithUser[0].user_id });
-                                            }
-                                        }
+                                    common.update_data('users', { btc_wallet: ownerTotalBtc }, { id: channelWithUser[0].user_id });
+
+                                    let traxnInsert2 = {
+                                        user_id: channelWithUser[0].user_id,
+                                        message: `Credited ${ownerAmount} BTC for a banner`,
+                                        btc_amount: ownerAmount,
+                                        trxn_id: new Date().getTime(),
+                                        trxn_type: 1
                                     }
+                                    common.add_data('transactions', traxnInsert2);
                                 }
+                                /*}
+                            }
+                        }*/
                             }
                         }
                     }
 
                     if (domains.length > 0) {
                         for (let i = 0; i < domains.length; i++) {
-                            const domain = domains[i];
+                            let domain = domains[i];
                             let oid = parseInt(domain.orderID);
                             //let obj = outputs.find(o => o.value == v);
 
@@ -127,6 +161,15 @@ exports.checker_payment = async (req, responce) => {
 
                             if (obj) {
                                 common.update_data('domains', { payment_status: 1, transaction_id: obj.addresses[0] }, { id: domain.id });
+
+                                let traxnInsert = {
+                                    user_id: domain.user_id,
+                                    message: `Spend ${domain.btc_cost} BTC to buy a ${domain.domain} Domain`,
+                                    btc_amount: domain.btc_cost,
+                                    trxn_id: new Date().getTime(),
+                                    trxn_type: 0
+                                }
+                                common.add_data('transactions', traxnInsert);
                             }
                         }
                     }
@@ -151,7 +194,7 @@ exports.checker_payment = async (req, responce) => {
 }
 
 exports.buy_banner = async (req, res) => {
-    const { hash, uuid, user_id, price } = req.body;
+    const { hash, uuid, user_id, price, language, country, state, city, channel, page_number } = req.body;
 
     if (!hash || !uuid || !user_id || !price) {
         res.status(200).json({
@@ -211,15 +254,33 @@ exports.buy_banner = async (req, res) => {
             let gen = n => "x".repeat(n).replace(/x/g, x => Math.random() * 10 | 0)
             let orderID = (1 + Math.random() * 9 | 0) + gen(5);
 
-
             const params = {
                 hash,
                 uuid,
                 user_id,
                 price,
                 orderID,
+                country,
+                state,
+                city,
+                channel,
+                page_number,
                 expire_time: expire_time
             };
+
+            if(country){
+                params.country = country
+            }
+
+            
+            if(state){
+                params.state = state
+            }
+
+            
+            if(city){
+                params.language = city
+            }
 
             const insert = common.add_data('banner_bids', params);
 
@@ -243,6 +304,77 @@ exports.buy_banner = async (req, res) => {
         return;
     }
 
+
+}
+
+exports.update_banner_image = async (req, res) => {
+
+    const { user_id, id } = req.body;
+    const { image } = req.files;
+
+    if (!user_id || !id) {
+
+        res.status(200).json({
+            status: 0,
+            message: 'Check parameter'
+        });
+        return
+    }
+
+    try {
+
+        let select, where;
+
+        select = "banner_owner.id";
+        where = ` where user_id = '${user_id}' ORDER BY id DESC`;
+
+        let data = await common.get_dynamic_data('banner_owner', where, select);
+
+        if (data.length == 0) {
+            res.status(200).json({
+                status: 0,
+                message: 'You are not authorized to update this banner.'
+            });
+            return
+        }
+
+        let update = {
+            upload_status:2
+        }
+
+        common.update_data('banner_owner', update, { id: id })
+
+        res.status(200).json({
+            status: 1,
+            message: 'Banner has been updated successfully.',
+            //data:inserted_id
+        });
+
+        console.log("image: ", image);
+
+        if (image && image.length > 0) {
+
+            let s_video_id = await web3.storeFilesToWeb3(image[0].path);
+            //console.log("s_video_id id: ", s_video_id);
+            let rs_video_id = await web3.retrieveFiles(s_video_id);
+            //console.log("s_video_id retrieve: ", rs_video_id);
+            let video_url = encodeURI("https://" + rs_video_id + ".ipfs.dweb.link/?filename=" + image[0].originalname);
+            fs.unlinkSync(image[0].path);
+
+            common.update_data('banner_owner', { image: video_url, upload_status:1 }, { id: id })
+
+        }
+
+
+
+
+    } catch (error) {
+
+        res.status(200).json({
+            status: 0,
+            message: error
+        });
+    }
 
 }
 
@@ -300,6 +432,44 @@ exports.get_bidders = async (req, res) => {
             })
             return
         }
+
+
+
+
+    } catch (error) {
+        res.status(200).json({
+            status: 0,
+            message: 'Something went wrong.',
+            data: error
+        })
+        return;
+    }
+
+
+}
+
+exports.my_banners = async (req, res) => {
+    const { user_id } = req.query;
+
+    if (!user_id) {
+        res.status(200).json({
+            status: 0,
+            message: 'Check parameters.'
+        })
+        return;
+    }
+
+    try {
+
+
+        const check = await common.get_data('banner_owner', " where user_id = " + user_id)
+
+
+        res.status(200).json({
+            status: 1,
+            message: 'Success',
+            data: check
+        })
 
 
 
@@ -396,7 +566,7 @@ exports.check_my_banner_status = async (req, res) => {
 
         const current_time = Math.round(new Date().getTime() / 1000);
 
-        const check2 = await common.get_data('banner_bids', " where user_id = " + user_id + " and expire_time > " + current_time)
+        const check2 = await common.get_data('banner_bids', " where user_id = " + user_id + " and payment_status = 0 and expire_time > " + current_time)
 
         if (check2.length > 0) {
             res.status(200).json({

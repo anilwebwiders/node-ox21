@@ -30,25 +30,29 @@ exports.get_languages = async (req, res) => {
 
 exports.get_channels = async (req, res) => {
 
-    const { user_id, keywords } = req.query;
+    const { user_id, keywords, my_channel } = req.query;
     
-    /*//const string = 'UmLJ2wNCqVg7nlgssswn8GolzGlcJ09Pycpr/9AhC60';
-    const secret = 'manish'
-    var ciphertext = CryptoJS.AES.encrypt('1,null,null,null,116,1', secret).toString();
-    console.log('hash ',ciphertext);
+    //const string = 'UmLJ2wNCqVg7nlgssswn8GolzGlcJ09Pycpr/9AhC60';
+    //const secret = 'manish'
+   // var ciphertext = CryptoJS.AES.encrypt('1,null,null,null,116,1', secret).toString();
+    //console.log('hash ',ciphertext);
 
-    var bytes  = CryptoJS.AES.decrypt(ciphertext, secret);
-    var originalText = bytes.toString(CryptoJS.enc.Utf8);
+    //var bytes  = CryptoJS.AES.decrypt('YB7VwIiDKEeuQZaJRqO3/w==', 'qwertyuiopasdfghjklzxcvbnmqwerty');
+    //var originalText = bytes.toString(CryptoJS.enc.Utf8);
 
-    console.log('originalText',originalText.split(',')[4]); // 'my message'*/
+    //console.log('originalText',originalText); // 'my message'*/
 
     try {
 
         let select, where;
-        where = '';
+        where = 'where 1 = 1';
 
         if (keywords) {
-            where += ` where name like '%${keywords}%'`
+            where += ` and name like '%${keywords}%'`
+        }
+
+        if (user_id && my_channel && my_channel==1) {
+            where += ' and created_by = '+ user_id;
         }
 
         if (user_id) {
@@ -59,7 +63,7 @@ exports.get_channels = async (req, res) => {
             where += ' ORDER BY id DESC';
         }
 
-        //console.log(where);
+        console.log(where);
 
         
 
@@ -148,6 +152,72 @@ exports.create_channels = async (req, res) => {
         fs.unlinkSync(image[0].path);
 
         common.update_data('channels', { image: video_url }, { id: inserted_id.insertId })
+
+
+    } catch (error) {
+
+        res.status(200).json({
+            status: 0,
+            message: error
+        });
+    }
+
+}
+
+exports.transactions = async (req, res) => {
+
+    const { user_id, currency, type, date } = req.query;
+ 
+    if (!user_id) {
+
+        res.status(200).json({
+            status: 0,
+            message: 'Check parameter'
+        });
+        return
+    }
+
+    try {
+
+        let select, where;
+
+        select = "transactions.*";
+        where = ` where user_id = '${user_id}'`;
+
+        if(currency){
+            if(currency=='usd'){
+                where += ` and usd_amount != 0`
+            } else if(currency=='jin'){
+                where += ` and jin_amount != 0`
+            } else if(currency=='btc'){
+                where += ` and btc_amount != 0`
+            } else if(currency=='points'){
+                where += ` and points != 0`
+            }
+        }
+
+        if(type){
+            if(type=='credit'){
+                where += ` and trxn_type = 1`
+            } else if(type=='debit'){
+                where += ` and trxn_type = 0`
+            }
+        }
+
+        if(date){
+            where += ` and DATE(created_at) = DATE('${date}')`
+        }
+
+        where += ` ORDER BY id DESC`;
+
+
+        let data = await common.get_dynamic_data('transactions', where, select);
+
+        res.status(200).json({
+            status: 1,
+            message: 'Success',
+            data:data
+        });
 
 
     } catch (error) {

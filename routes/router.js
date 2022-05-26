@@ -43,6 +43,7 @@ router.get("/likePost", post_module_api.likePost);
 router.get("/dislikePost", post_module_api.dislikePost);
 router.get("/removeLikeOrDislike", post_module_api.removeLikeOrDislike);
 router.get("/my_channels", users.my_channels);
+router.get("/transactions", users.transactions);
 router.get("/getTopBannerPrices", common_api.getTopBannerPrices);
 router.get("/my_points", post_module_api.my_points);
 
@@ -51,6 +52,8 @@ router.post("/buy_banner", banner.buy_banner);
 router.get("/get_bidders", banner.get_bidders);
 router.get("/checker_payment", banner.checker_payment);
 router.get("/check_my_banner_status", banner.check_my_banner_status);
+router.get("/my_banners", banner.my_banners);
+router.post("/update_banner_image/", upload.fields([{ name: 'image', maxCount: 1 }]), banner.update_banner_image);
 
 
 //domain api

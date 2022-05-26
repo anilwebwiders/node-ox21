@@ -52,7 +52,7 @@ exports.check_domain = async (req, res) => {
 }
 
 exports.buy_domain = async (req, res) => {
-    const { domain, user_id, payment_by, usd_cost, jin_cost, btc_cost, orderID } = req.body
+    const { domain, user_id, payment_by, usd_cost, jin_cost, btc_cost, orderID, transaction_id } = req.body
 
     if (!domain || !user_id || !payment_by || !usd_cost || !jin_cost || !btc_cost || !orderID) {
         res.status(200).json({
@@ -105,6 +105,15 @@ exports.buy_domain = async (req, res) => {
 
 
     } else if (payment_by == "btc") {
+    } else if (payment_by == "paypal") {
+
+        if (!transaction_id) {
+            res.status(200).json({
+                status: 0,
+                message: `Invalid transaction id`,
+            })
+            return
+        }
 
     } else {
         res.status(200).json({
@@ -123,12 +132,16 @@ exports.buy_domain = async (req, res) => {
     //console.log(`current_time ${current_time}`);
 
     let payment_status = 0;
-    let transaction_id = '';
+    let transaction_id2 = '';
 
     if (payment_by == 'points') {
         payment_status = 1;
-        transaction_id = new Date().getTime();
+        transaction_id2 = new Date().getTime();
+    } else if (payment_by == 'paypal') {
+        payment_status = 1;
+        transaction_id2 = transaction_id;
     }
+
 
     const insert = {
         domain,
@@ -140,7 +153,7 @@ exports.buy_domain = async (req, res) => {
         usd_cost,
         payment_by,
         payment_status,
-        transaction_id,
+        transaction_id:transaction_id2,
         expire_time
     }
 
@@ -150,7 +163,26 @@ exports.buy_domain = async (req, res) => {
         let update_payemnt = points-needed_points;
         
         
-        let update = await common.update_data("users",{points:update_payemnt},{id:user_id})
+        common.update_data("users",{points:update_payemnt},{id:user_id});
+
+        let traxnInsert = {
+            user_id:user_id,
+            message:`Spend ${needed_points} Points to buy a ${domain} Domain`,
+            points:needed_points,
+            trxn_id: new Date().getTime(),
+            trxn_type:0
+        }
+        common.add_data('transactions',traxnInsert);
+    } else if(insertdata.affectedRows > 0 && payment_by =='paypal'){
+       
+        let traxnInsert = {
+            user_id:user_id,
+            message:`Spend ${btc_cost} BTC to buy a ${domain} Domain`,
+            btc_amount:btc_cost,
+            trxn_id: new Date().getTime(),
+            trxn_type:0
+        }
+        common.add_data('transactions',traxnInsert);
     }
 
     res.status(200).json({
@@ -210,11 +242,11 @@ exports.startsOrEndsWithWhitespace = async (str,user_id) => {
             let data = {};
             let message = 'Not Available';
             let status = 0;
-            if(user_id == check[0].user_id){
+            /*if(user_id == check[0].user_id){
                 data = check[0];
                 message = 'Pyament pending';
                 status = 2;
-            }
+            }*/
 
             return {
                 status: status,

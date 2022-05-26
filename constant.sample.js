@@ -8,5 +8,5 @@ module.exports = {
 
     SHA_KEY: 'manish',
     BLOCK_API: 'xxxxxxx',
-    WEB3_TOKEN:'xxxxxxx'
+    WEB3_TOKEN:'xxxxxxx',
 }

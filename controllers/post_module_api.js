@@ -1,6 +1,7 @@
 const common = require("../models/common");
 let fs = require('fs');
 const web3 = require("../web3");
+const { APP_URL } = require("../constant");
 
 
 
@@ -624,7 +625,7 @@ exports.getAllPost = async (req, res) => {
         let where = "where visibility = 'public'";
 
 
-        let { video_type, last_id, channel_id } = req.query;
+        let { video_type, page, channel_id } = req.query;
 
 
         if (video_type) {
@@ -645,13 +646,11 @@ exports.getAllPost = async (req, res) => {
         if (user_channel.length > 0) {
 
             if (user_channel[0].channels) {
-                //where += ` and channel_id in (${user_channel[0].channels})`
+                where += ` and channel_id in (${user_channel[0].channels})`
             }
         }
 
-        if (last_id !== undefined) {
-            where += ` and id < ${last_id}`
-        }
+        
 
         if (channel_id !== undefined) {
             where += ` and channel_id = ${channel_id}`
@@ -663,23 +662,116 @@ exports.getAllPost = async (req, res) => {
         //let select = "t1.id, IF(ISNULL(SUM(t2.state)), 0, SUM(t2.state)) AS state";
         //let table = "post as t1 LEFT JOIN post_like as t2 on t1.id = t2.post_id";
 
+        let select2 = "count(id) as total";
+
+        let total = 0
+
+        const dataCount = await common.get_dynamic_data('post', where, select2);
+
+        if(dataCount.length > 0){
+            total = dataCount[0].total 
+        }
+
+
+        console.log(`total ${total}`)
+
+
         let select = "id, (select sum(state) from post_like where post_like.post_id = post.id) AS state, (select count(state) from post_like where post_like.post_id = post.id and state = 1) AS likes, (select count(state) from post_like where post_like.post_id = post.id and state = -1) AS dislikes";
 
-        where += ' ORDER BY state DESC,  id DESC LIMIT 10';
+        const results_per_page = 10;
+        const number_of_page = Math.ceil (total / results_per_page); 
+        
+        let sart_page = 1;
+
+        if (page && page !== undefined) {
+            sart_page = page
+        }
+
+        const page_first_result = (sart_page-1) * results_per_page; 
+
+
+        where += ` ORDER BY state DESC,  id DESC LIMIT ${page_first_result}, ${results_per_page}`;
 
 
         const data = await common.get_dynamic_data('post', where, select);
 
+        let NewWhere = ` where page_number='${sart_page}'`;
+
+        if (user_channel.length > 0) {
+
+            if (user_channel[0].channels) {
+                NewWhere += ` and channel in (${user_channel[0].channels})`
+            }
+        }
+
+
+        let userdata = await common.get_dynamic_data('users', ` where id = ${user_id}`, "id,country,city,province,language");
+
+        if(userdata.length > 0){
+            userdata = userdata[0];
+
+            NewWhere += ` and language = '${userdata.language}'`
+
+            NewWhere += ` and ((country IS NULL || city IS NULL || state IS NULL)`
+
+            if(userdata.country){
+                NewWhere += ` or (country =  '${userdata.country}' || city IS NULL || state IS NULL)`
+            }
+
+            if(userdata.country && userdata.province){
+                NewWhere += ` or (country =  '${userdata.country}' || city IS NULL || state = '${userdata.province}')`
+            }
+
+            if(userdata.country && userdata.province  && userdata.city){
+                NewWhere += ` or (country =  '${userdata.country}' || city  = '${userdata.city}' || state = '${userdata.province}')`
+            }
+
+            NewWhere += `)`
+            
+        }
+
+        NewWhere += ` order by rand() limit 0,5`;
+        
+        const banners = await common.get_dynamic_data('banner_owner',NewWhere,"id, image");
 
         const result = [];
 
-        console.log(data);
+       let currentLoop = 0;
+       let banner_avail = banners.length;
 
         if (data.length > 0) {
 
             for (var i = 0; i < data.length; i++) {
+                
+                
+                if(banner_avail > 0){
+                    if(currentLoop==2){
+
+                        let banner = banners[banner_avail-1];
+
+                        banner.is_banner = true;
+
+                        if (!banner.image) {
+                            banner.image = APP_URL + 'images/banner.png';
+                        }
+
+                        /*if (!banner.link) {
+                            banner.link = APP_URL;
+                        }*/
+
+                        result.push(banner);
+
+                        banner_avail--;
+                    }
+                }
+
                 const loop = await common.getPostDetail(data[i], user_id);
-                result.push(loop)
+
+                loop.is_banner = false;
+                
+                result.push(loop);
+
+                currentLoop++;
             }
         }
 
@@ -687,9 +779,12 @@ exports.getAllPost = async (req, res) => {
         res.status(200).json({
             status: 1,
             message: "Success",
+            total:total,
+            number_of_page:number_of_page,
+            //NewWhere:NewWhere,
             data: result
         });
-        return;
+        return; 
 
 
 
